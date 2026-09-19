@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Typing Trainer</title>
+<style>
+  * { box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: #05060a;
+    color: #e8e9f0;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
+  }
+
+  /* ---- ambient moonlight background ---- */
+  #glowLayer {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(600px circle at var(--mx, 50%) var(--my, 20%),
+        rgba(230, 235, 255, 0.10), transparent 60%),
+      radial-gradient(900px circle at 80% 10%, rgba(180, 200, 255, 0.05), transparent 55%),
+      radial-gradient(1000px circle at 10% 90%, rgba(150, 170, 255, 0.04), transparent 60%);
+    transition: background-position 0.3s ease;
+  }
+  #stars {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.5;
+  }
+
+  .wrap {
+    position: relative;
+    z-index: 1;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 48px 20px 80px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 36px;
+    animation: fadeDown 0.7s ease both;
+  }
+  header h1 {
+    font-size: 28px;
+    font-weight: 600;
+    margin: 0 0 8px;
+    letter-spacing: 0.3px;
+    background: linear-gradient(90deg, #dfe6ff, #a9b8ff 40%, #dfe6ff);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: shimmer 6s linear infinite;
+  }
+  header p {
+    color: #8a8fa8;
+    font-size: 14px;
+    margin: 0;
+  }
+
+  @keyframes shimmer {
+    to { background-position: 200% center; }
+  }
+  @keyframes fadeDown {
+    from { opacity: 0; transform: translateY(-14px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .glass {
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 18px;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+    padding: 24px;
+    animation: fadeUp 0.6s ease both;
+  }
+
+  textarea, #typeArea {
+    width: 100%;
+    font-size: 16px;
+    padding: 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.04);
+    color: #eef0fb;
+    font-family: inherit;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.25s, box-shadow 0.25s;
+  }
+  textarea::placeholder, #typeArea::placeholder { color: #656a80; }
+  textarea:focus, #typeArea:focus {
+    border-color: rgba(140, 170, 255, 0.6);
+    box-shadow: 0 0 0 3px rgba(120, 150, 255, 0.15), 0 0 24px rgba(120,150,255,0.15);
+  }
+
+  .btn {
+    margin-top: 16px;
+    padding: 12px 24px;
+    font-size: 15px;
+    font-weight: 500;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    color: #05060a;
+    background: linear-gradient(135deg, #cfe0ff, #8fb0ff);
+    box-shadow: 0 4px 18px rgba(140, 170, 255, 0.35);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(140, 170, 255, 0.5); }
+  .btn:active { transform: translateY(0); }
+
+  .btn.secondary {
+    background: rgba(255,255,255,0.06);
+    color: #cdd1e6;
+    box-shadow: none;
+    border: 1px solid rgba(255,255,255,0.12);
+    margin-left: 10px;
+  }
+  .btn.secondary:hover { background: rgba(255,255,255,0.1); }
+
+  #practice { display: none; }
+
+  #display {
+    font-size: 20px;
+    line-height: 1.9;
+    letter-spacing: 0.3px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    margin-bottom: 20px;
+    max-height: 5.7em; /* roughly 3 lines at this line-height */
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    padding-right: 6px;
+  }
+  #display::-webkit-scrollbar { width: 6px; }
+  #display::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+  #display span { transition: color 0.15s ease, text-shadow 0.15s ease; }
+  .pending { color: #565a72; }
+  .correct { color: #6ee7a8; text-shadow: 0 0 10px rgba(110,231,168,0.35); }
+  .incorrect {
+    color: #ff8686;
+    background: rgba(255,90,90,0.12);
+    border-radius: 4px;
+    text-shadow: 0 0 10px rgba(255,120,120,0.4);
+  }
+  .current { border-bottom: 2px solid #8fb0ff; }
+
+  #typeArea.shake {
+    animation: shake 0.3s;
+    border-color: #ff6b6b;
+    box-shadow: 0 0 0 3px rgba(255,107,107,0.2);
+  }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-8px); }
+    40% { transform: translateX(8px); }
+    60% { transform: translateX(-6px); }
+    80% { transform: translateX(6px); }
+  }
+
+  #stats {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .stat-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 12px 14px;
+    text-align: center;
+  }
+  .stat-card .label {
+    font-size: 12px;
+    color: #8a8fa8;
+    margin-bottom: 4px;
+  }
+  .stat-card .value {
+    font-size: 20px;
+    font-weight: 600;
+    color: #dfe4ff;
+  }
+
+  #doneMsg {
+    display: none;
+    margin-top: 18px;
+    padding: 16px;
+    border-radius: 12px;
+    background: rgba(110,231,168,0.08);
+    border: 1px solid rgba(110,231,168,0.3);
+    font-size: 15px;
+    color: #b6ffd6;
+    animation: fadeUp 0.4s ease both;
+  }
+
+  .actions { margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<canvas id="stars"></canvas>
+<div id="glowLayer"></div>
+
+<div class="wrap">
+  <header>
+    <h1>Typing trainer</h1>
+    <p>Paste your text, then retype it. Correct glows green, mistakes glow red.</p>
+  </header>
+
+  <div id="setup" class="glass">
+    <textarea id="sourceText" rows="6" placeholder="Paste the text you want to practice typing..."></textarea>
+    <div class="actions">
+      <button class="btn" onclick="startPractice()">Start typing</button>
+    </div>
+  </div>
+
+  <div id="practice" class="glass">
+    <div id="display"></div>
+    <textarea id="typeArea" rows="4" placeholder="Start typing here..." autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
+
+    <div id="stats">
+      <div class="stat-card">
+        <div class="label">Time</div>
+        <div class="value" id="timeStat">0s</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">WPM</div>
+        <div class="value" id="wpmStat">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Accuracy</div>
+        <div class="value" id="accStat">100%</div>
+      </div>
+    </div>
+
+    <div id="doneMsg"></div>
+    <div class="actions">
+      <button class="btn secondary" onclick="resetAll()">Reset</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---- moonlight glow follows pointer, gently drifts on its own ---- */
+const glow = document.getElementById('glowLayer');
+let targetX = 50, targetY = 20, curX = 50, curY = 20;
+window.addEventListener('mousemove', e => {
+  targetX = (e.clientX / window.innerWidth) * 100;
+  targetY = (e.clientY / window.innerHeight) * 100;
+});
+let driftT = 0;
+function animateGlow() {
+  driftT += 0.004;
+  const driftX = Math.sin(driftT) * 6;
+  const driftY = Math.cos(driftT * 0.8) * 4;
+  curX += (targetX - curX) * 0.03;
+  curY += (targetY - curY) * 0.03;
+  glow.style.setProperty('--mx', (curX + driftX) + '%');
+  glow.style.setProperty('--my', (curY + driftY) + '%');
+  requestAnimationFrame(animateGlow);
+}
+animateGlow();
+
+/* ---- faint drifting stars ---- */
+const canvas = document.getElementById('stars');
+const ctx = canvas.getContext('2d');
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+const stars = Array.from({ length: 90 }, () => ({
+  x: Math.random() * window.innerWidth,
+  y: Math.random() * window.innerHeight,
+  r: Math.random() * 1.2 + 0.2,
+  s: Math.random() * 0.15 + 0.02,
+  a: Math.random() * 0.5 + 0.2
+}));
+function drawStars() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (const st of stars) {
+    st.y += st.s;
+    if (st.y > canvas.height) { st.y = 0; st.x = Math.random() * canvas.width; }
+    ctx.beginPath();
+    ctx.arc(st.x, st.y, st.r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(220,225,255,${st.a})`;
+    ctx.fill();
+  }
+  requestAnimationFrame(drawStars);
+}
+drawStars();
+
+/* ---- core typing trainer logic (unchanged behavior) ---- */
+let sourceText = "";
+let startTime = null;
+let mistakeCount = 0;
+let totalKeystrokes = 0;
+let finished = false;
+let timerInterval = null;
+
+const setupDiv = document.getElementById('setup');
+const practiceDiv = document.getElementById('practice');
+const display = document.getElementById('display');
+const typeArea = document.getElementById('typeArea');
+const doneMsg = document.getElementById('doneMsg');
+
+function startPractice() {
+  const text = document.getElementById('sourceText').value.trim();
+  if (!text) {
+    alert('Paste some text first.');
+    return;
+  }
+  sourceText = text;
+  setupDiv.style.display = 'none';
+  practiceDiv.style.display = 'block';
+  renderDisplay('');
+  typeArea.value = '';
+  typeArea.disabled = false;
+  typeArea.focus();
+  startTime = null;
+  mistakeCount = 0;
+  totalKeystrokes = 0;
+  finished = false;
+  doneMsg.style.display = 'none';
+  updateStats();
+}
+
+function renderDisplay(typed) {
+  let html = '';
+  for (let i = 0; i < sourceText.length; i++) {
+    const ch = sourceText[i];
+    const safeCh = ch.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const displayCh = ch === '\n' ? '<br>' : (ch === ' ' ? '&nbsp;' : safeCh);
+    let cls = 'pending';
+    if (i < typed.length) {
+      cls = (typed[i] === ch) ? 'correct' : 'incorrect';
+    } else if (i === typed.length) {
+      cls = 'pending current';
+    }
+    html += `<span class="${cls}">${displayCh}</span>`;
+  }
+  display.innerHTML = html;
+
+  const currentEl = display.querySelector('.current');
+  if (currentEl) {
+    const boxTop = display.scrollTop;
+    const boxBottom = boxTop + display.clientHeight;
+    const elTop = currentEl.offsetTop;
+    const elBottom = elTop + currentEl.offsetHeight;
+    if (elTop < boxTop || elBottom > boxBottom) {
+      display.scrollTop = elTop - display.clientHeight / 2;
+    }
+  }
+}
+
+typeArea.addEventListener('input', function() {
+  if (finished) return;
+  const typed = typeArea.value;
+
+  if (startTime === null && typed.length > 0) {
+    startTime = Date.now();
+    timerInterval = setInterval(updateStats, 500);
+  }
+
+  const lastIndex = typed.length - 1;
+  if (lastIndex >= 0) {
+    totalKeystrokes++;
+    const expectedChar = sourceText[lastIndex];
+    if (typed[lastIndex] !== expectedChar) {
+      mistakeCount++;
+      typeArea.value = typed.slice(0, lastIndex);
+      typeArea.classList.remove('shake');
+      void typeArea.offsetWidth;
+      typeArea.classList.add('shake');
+      renderDisplay(typeArea.value);
+      updateStats();
+      return;
+    }
+  }
+
+  renderDisplay(typed);
+  updateStats();
+
+  if (typed.length === sourceText.length) {
+    finishTyping();
+  }
+});
+
+function updateStats() {
+  const elapsedSec = startTime ? (Date.now() - startTime) / 1000 : 0;
+  document.getElementById('timeStat').textContent = Math.round(elapsedSec) + 's';
+  const typedLen = typeArea.value.length;
+  const words = typedLen / 5;
+  const minutes = elapsedSec / 60;
+  const wpm = minutes > 0 ? Math.round(words / minutes) : 0;
+  document.getElementById('wpmStat').textContent = wpm;
+  const accuracy = totalKeystrokes > 0
+    ? Math.round(((totalKeystrokes - mistakeCount) / totalKeystrokes) * 100)
+    : 100;
+  document.getElementById('accStat').textContent = Math.max(0, accuracy) + '%';
+}
+
+function finishTyping() {
+  finished = true;
+  clearInterval(timerInterval);
+  typeArea.disabled = true;
+  const elapsedSec = startTime ? (Date.now() - startTime) / 1000 : 0;
+  const wpm = document.getElementById('wpmStat').textContent;
+  const acc = document.getElementById('accStat').textContent;
+  doneMsg.style.display = 'block';
+  doneMsg.innerHTML = `Done! Time: ${Math.round(elapsedSec)}s &nbsp;|&nbsp; WPM: ${wpm} &nbsp;|&nbsp; Accuracy: ${acc}`;
+}
+
+function resetAll() {
+  clearInterval(timerInterval);
+  setupDiv.style.display = 'block';
+  practiceDiv.style.display = 'none';
+  document.getElementById('sourceText').value = '';
+}
+</script>
+
+</body>
+</html>
